@@ -113,6 +113,7 @@ class GeradorCodigoSaM:
     def visit_Atribuicao(self, node: Atribuicao):
         self.gerar_expressao(node.expressao)
         self.converter_topo_para(node.expressao.tipo_inferido, node.simbolo.tipo)
+        self.emitir('DUP')
         self.emitir(f'STOREOFF {node.simbolo.offset}')
 
     def visit_AtribuicaoVetor(self, node: AtribuicaoVetor):
@@ -124,6 +125,7 @@ class GeradorCodigoSaM:
         self.emitir('ADD')
         self.gerar_expressao(node.expressao)
         self.converter_topo_para(node.expressao.tipo_inferido, node.simbolo.tipo_elemento)
+        self.emitir('DUP')
         self.emitir('STOREIND')
 
     def visit_ExpressaoComando(self, node: ExpressaoComando):

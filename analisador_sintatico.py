@@ -198,6 +198,22 @@ class AnalisadorSintatico:
             self.erro("Esperado um tipo primitivo")
         return self.consumir(self.token_atual.tipo)
 
+    def consumir_tipo_retorno(self):
+        if self.token_atual.tipo not in TIPOS_PRIMITIVOS:
+            self.erro("Esperado um tipo de retorno")
+        return self.consumir(self.token_atual.tipo)
+
+    def consumir_tipo_variavel(self):
+        token = self.consumir_tipo()
+        if token.tipo == VOID:
+            self.erro("Esperado um tipo valido para declaracao")
+        return token
+
+    def consumir_tipo_parametro(self):
+        if self.token_atual.tipo == VOID:
+            self.erro("Parametros nao podem ser do tipo void")
+        return self.consumir_tipo()
+
     def programa(self):
         funcoes = []
         while self.token_atual.tipo != FIM_DE_ARQUIVO:
@@ -205,31 +221,33 @@ class AnalisadorSintatico:
         return Programa(funcoes)
 
     def declaracao_funcao(self):
-        token_tipo = self.consumir_tipo()
+        token_tipo = self.consumir_tipo_retorno()
         nome_funcao = self.consumir(IDENTIFICADOR).valor
         self.consumir(ABRE_PAREN)
-        parametros = self.lista_parametros()
+        parametros = self.parametros_opcionais()
         self.consumir(FECHA_PAREN)
         bloco = self.bloco()
         return DeclaracaoFuncao(TIPOS_PRIMITIVOS[token_tipo.tipo], nome_funcao, parametros, bloco)
 
-    def lista_parametros(self):
+    def parametros_opcionais(self):
         parametros = []
         if self.token_atual.tipo == FECHA_PAREN:
             return parametros
 
-        if self.token_atual.tipo == VOID and self.proximo_token.tipo == FECHA_PAREN:
+        if self.token_atual.tipo == VOID:
             self.consumir(VOID)
             return parametros
 
-        while True:
-            token_tipo = self.consumir_tipo()
-            nome = self.consumir(IDENTIFICADOR).valor
-            parametros.append(Parametro(TIPOS_PRIMITIVOS[token_tipo.tipo], nome))
-            if self.token_atual.tipo != VIRGULA:
-                break
+        parametros.append(self.parametro())
+        while self.token_atual.tipo == VIRGULA:
             self.consumir(VIRGULA)
+            parametros.append(self.parametro())
         return parametros
+
+    def parametro(self):
+        token_tipo = self.consumir_tipo_parametro()
+        nome = self.consumir(IDENTIFICADOR).valor
+        return Parametro(TIPOS_PRIMITIVOS[token_tipo.tipo], nome)
 
     def bloco(self):
         self.consumir(ABRE_CHAVE)
@@ -243,21 +261,17 @@ class AnalisadorSintatico:
         if self.token_atual.tipo == ABRE_CHAVE:
             return self.bloco()
         if self.token_atual.tipo in (INT, FLOAT, CHAR, BOOL, STRING):
-            return self.declaracao_variavel_ou_vetor()
+            return self.declaracao()
         if self.token_atual.tipo == IF:
             return self.comando_se()
         if self.token_atual.tipo == WHILE:
             return self.comando_enquanto()
         if self.token_atual.tipo == RETURN:
             return self.comando_retorno()
-        if self.token_atual.tipo == IDENTIFICADOR and self.proximo_token.tipo == ATRIBUICAO:
-            return self.atribuicao()
-        if self.token_atual.tipo == IDENTIFICADOR and self.proximo_token.tipo == ABRE_COLCHETE:
-            return self.atribuicao_vetor_ou_erro()
         return self.expressao_comando()
 
-    def declaracao_variavel_ou_vetor(self):
-        token_tipo = self.consumir_tipo()
+    def declaracao(self):
+        token_tipo = self.consumir_tipo_variavel()
         nome = self.consumir(IDENTIFICADOR).valor
         tipo = TIPOS_PRIMITIVOS[token_tipo.tipo]
 
@@ -268,31 +282,15 @@ class AnalisadorSintatico:
             self.consumir(PONTO_VIRGULA)
             return DeclaracaoVetor(tipo, nome, tamanho)
 
-        inicializador = None
-        if self.token_atual.tipo == ATRIBUICAO:
-            self.consumir(ATRIBUICAO)
-            inicializador = self.expressao()
+        inicializador = self.opcional_atribuicao()
         self.consumir(PONTO_VIRGULA)
         return DeclaracaoVariavel(tipo, nome, inicializador)
 
-    def atribuicao(self):
-        nome_var = self.consumir(IDENTIFICADOR).valor
-        self.consumir(ATRIBUICAO)
-        expr = self.expressao()
-        self.consumir(PONTO_VIRGULA)
-        return Atribuicao(nome_var, expr)
-
-    def atribuicao_vetor_ou_erro(self):
-        nome_vetor = self.consumir(IDENTIFICADOR).valor
-        self.consumir(ABRE_COLCHETE)
-        indice = self.expressao()
-        self.consumir(FECHA_COLCHETE)
+    def opcional_atribuicao(self):
         if self.token_atual.tipo != ATRIBUICAO:
-            self.erro("acesso a vetor isolado nao pode ser usado como comando")
+            return None
         self.consumir(ATRIBUICAO)
-        expr = self.expressao()
-        self.consumir(PONTO_VIRGULA)
-        return AtribuicaoVetor(nome_vetor, indice, expr)
+        return self.expressao()
 
     def expressao_comando(self):
         expr = self.expressao()
@@ -330,7 +328,16 @@ class AnalisadorSintatico:
         return Retorno(expr)
 
     def expressao(self):
-        return self.expressao_or_logico()
+        no = self.expressao_or_logico()
+        if self.token_atual.tipo == ATRIBUICAO:
+            self.consumir(ATRIBUICAO)
+            expressao_direita = self.expressao()
+            if isinstance(no, Variavel):
+                return Atribuicao(no.nome, expressao_direita)
+            if isinstance(no, AcessoVetor):
+                return AtribuicaoVetor(no.nome_vetor, no.indice, expressao_direita)
+            self.erro("lado esquerdo invalido em atribuicao")
+        return no
 
     def expressao_or_logico(self):
         no = self.expressao_and_logico()
@@ -421,12 +428,7 @@ class AnalisadorSintatico:
             return LiteralBooleano(token)
 
         if token.tipo == IDENTIFICADOR:
-            if self.proximo_token.tipo == ABRE_PAREN:
-                return self.chamada_funcao()
-            if self.proximo_token.tipo == ABRE_COLCHETE:
-                return self.acesso_vetor()
-            self.consumir(IDENTIFICADOR)
-            return Variavel(token)
+            return self.identificador_primaria()
 
         if token.tipo == ABRE_PAREN:
             self.consumir(ABRE_PAREN)
@@ -436,25 +438,30 @@ class AnalisadorSintatico:
 
         self.erro("Erro de sintaxe na expressao")
 
-    def acesso_vetor(self):
-        nome_vetor = self.consumir(IDENTIFICADOR).valor
-        self.consumir(ABRE_COLCHETE)
-        indice = self.expressao()
-        self.consumir(FECHA_COLCHETE)
-        return AcessoVetor(nome_vetor, indice)
+    def identificador_primaria(self):
+        token_identificador = self.consumir(IDENTIFICADOR)
+        nome = token_identificador.valor
+        if self.token_atual.tipo == ABRE_PAREN:
+            self.consumir(ABRE_PAREN)
+            argumentos = self.argumentos_opcionais()
+            self.consumir(FECHA_PAREN)
+            return ChamadaFuncao(nome, argumentos)
+        if self.token_atual.tipo == ABRE_COLCHETE:
+            self.consumir(ABRE_COLCHETE)
+            indice = self.expressao()
+            self.consumir(FECHA_COLCHETE)
+            return AcessoVetor(nome, indice)
+        return Variavel(token_identificador)
 
-    def chamada_funcao(self):
-        nome_funcao = self.consumir(IDENTIFICADOR).valor
-        self.consumir(ABRE_PAREN)
+    def argumentos_opcionais(self):
         argumentos = []
-        if self.token_atual.tipo != FECHA_PAREN:
-            while True:
-                argumentos.append(self.expressao())
-                if self.token_atual.tipo != VIRGULA:
-                    break
-                self.consumir(VIRGULA)
-        self.consumir(FECHA_PAREN)
-        return ChamadaFuncao(nome_funcao, argumentos)
+        if self.token_atual.tipo == FECHA_PAREN:
+            return argumentos
+        argumentos.append(self.expressao())
+        while self.token_atual.tipo == VIRGULA:
+            self.consumir(VIRGULA)
+            argumentos.append(self.expressao())
+        return argumentos
 
     def analisar(self):
         no_raiz = self.programa()

@@ -257,10 +257,7 @@ class AnalisadorSemantico(NodeVisitor):
         return simbolo.tipo_elemento
     
     def visit_ExpressaoComando(self, node: ExpressaoComando):
-        tipo = self.visit(node.expressao)
-        if not isinstance(node.expressao, ChamadaFuncao):
-            self.erro("somente chamadas de funcao podem ser usadas como comando de expressao")
-        return tipo
+        return self.visit(node.expressao)
 
     def visit_Variavel(self, node: Variavel):
         simbolo = self.escopos.buscar(node.nome)

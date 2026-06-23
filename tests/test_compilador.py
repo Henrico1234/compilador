@@ -140,15 +140,15 @@ class CompiladorTestCase(unittest.TestCase):
         self.assertIn('while_inicio_', codigo_sam)
         self.assertIn('MOD', codigo_sam)
 
-    def test_comando_expressao_exige_chamada_de_funcao(self):
+    def test_comando_expressao_aceita_expressao_simples(self):
         codigo = """
         int main() {
             1 + 2;
             return 0;
         }
         """
-        with self.assertRaisesRegex(Exception, "somente chamadas de funcao"):
-            compilar(codigo)
+        _, codigo_sam = compilar(codigo)
+        self.assertIn('ADD', codigo_sam)
 
     def test_bool_string_bitwise_e_vetor(self):
         codigo = """
