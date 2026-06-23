@@ -1,0 +1,17 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test and debug artifacts
+resultado_testes.txt
+debug_entrada_minima.txt
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Common local files
+.DS_Store
+Thumbs.db
