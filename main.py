@@ -34,7 +34,6 @@ int main() {
 
 
 def compilar_codigo(codigo_fonte):
-    # Encadeia as etapas do compilador: lexico, sintatico, semantico e geracao.
     analisador_lexico = AnalisadorLexico(codigo_fonte)
     analisador_sintatico = AnalisadorSintatico(analisador_lexico)
     arvore_sintatica = analisador_sintatico.analisar()
@@ -48,14 +47,12 @@ def compilar_codigo(codigo_fonte):
 
 
 def carregar_codigo(caminho_entrada):
-    # Se nao vier arquivo, usa o exemplo embutido para facilitar teste rapido.
     if caminho_entrada is None:
         return CODIGO_EXEMPLO
     return Path(caminho_entrada).read_text(encoding='utf-8')
 
 
 def main():
-    # Trata argumentos de linha de comando e mostra o resultado da compilacao.
     parser = argparse.ArgumentParser(description='Compilador da linguagem procedural para assembly SaM.')
     parser.add_argument('arquivo', nargs='?', help='Arquivo-fonte da linguagem procedural.')
     parser.add_argument('-o', '--saida', help='Arquivo de saida para o assembly SaM gerado.')
